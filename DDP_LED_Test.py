@@ -5,7 +5,8 @@ import time
 WLED_IP = "192.168.1.186"  # Replace with your WLED IP
 WLED_PORT = 4048  # Default DDP port for WLED
 NUM_LEDS = 358  # Total number of LEDs
-DELAY = 0.01  # Delay between updates
+DELAY = 0.05  # Delay between updates (seconds)
+FADE_FACTOR = .99  # How much brightness fades per step (0.8 = 80% brightness retained)
 
 def create_ddp_packet(pixel_data):
     """
@@ -25,28 +26,43 @@ def create_ddp_packet(pixel_data):
 
     return header + pixel_data
 
-def light_up_sequentially():
+def light_up_with_fade():
     """
-    Sequentially light up LEDs using DDP packets.
+    Sequentially light up LEDs with a fading effect using DDP packets.
     """
     # Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+    # Initialize a buffer to track brightness levels for each LED
+    led_brightness = [[0, 0, 0] for _ in range(NUM_LEDS)]  # Start with all LEDs off
+
     try:
         while True:
             for i in range(NUM_LEDS):
-                # Create pixel data: All LEDs off except one
-                pixel_data = bytearray([0, 0, 0] * NUM_LEDS)
-                pixel_data[i * 3:i * 3 + 3] = [0, 0, 255]  # Blue color for the current LED
+                # Light up the current LED with full brightness (Blue: GBR = 0, 0, 255)
+                led_brightness[i] = [0, 0, 255]
+
+                # Apply the fade effect to all LEDs
+                for j in range(NUM_LEDS):
+                    led_brightness[j] = [
+                        max(0, int(led_brightness[j][0] * FADE_FACTOR)),  # Fade Green
+                        max(0, int(led_brightness[j][1] * FADE_FACTOR)),  # Fade Blue
+                        max(0, int(led_brightness[j][2] * FADE_FACTOR))   # Fade Red
+                    ]
+
+                # Create pixel data from the brightness buffer
+                pixel_data = bytearray()
+                for color in led_brightness:
+                    pixel_data.extend(color)
 
                 # Create the DDP packet
                 packet = create_ddp_packet(pixel_data)
 
                 # Send the packet to the WLED device
                 sock.sendto(packet, (WLED_IP, WLED_PORT))
-                print(f"Lit up LED {i} with blue color")
+                print(f"Lit up LED {i} with fade effect")
 
-                # Wait for a delay before the next LED
+                # Wait for the delay before moving to the next LED
                 time.sleep(DELAY)
 
     except KeyboardInterrupt:
@@ -55,7 +71,7 @@ def light_up_sequentially():
         sock.close()
 
 def main():
-    light_up_sequentially()
+    light_up_with_fade()
 
 if __name__ == "__main__":
     main()
