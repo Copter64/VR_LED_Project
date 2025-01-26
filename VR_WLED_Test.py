@@ -18,7 +18,7 @@ def light_up_sequentially():
     
     # LED strip configuration
     num_leds = 358  # Total number of LEDs
-    delay = 0.01  # Delay between lighting each LED in seconds
+    delay = 0.0001  # Delay between lighting each LED in seconds
     
     # Loop to light up each LED one at a time
 
