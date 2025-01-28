@@ -1,14 +1,18 @@
-import asyncio
 import openvr
 import numpy as np
 import aiohttp
-import time
+import asyncio
 import json
-import timeit
+import time
+from collections import defaultdict
+import socket
 
 # WLED Configuration
 WLED_IP = "192.168.1.186"  # Replace with your WLED IP
 NUM_LEDS = 358  # Total number of LEDs on the strip
+
+# Shared state for LED management
+led_state = defaultdict(lambda: [0, 0, 0, 0])  # Tracks [R, G, B, fade_steps] for each LED
 
 # File to save/load mapped LED positions
 LED_MAPPING_FILE = "led_mapping.json"
@@ -43,79 +47,91 @@ def rgb_to_hex(rgb):
     """
     return str('%02x%02x%02x' % rgb).upper()
 
-async def set_leds(current_led, color):
+def create_ddp_packet(pixel_data):
     """
-    Light up a single LED on the WLED strip.
+    Create a DDP packet with the given pixel data.
     Args:
-        current_led (int): The index of the LED to light up.
-        color (tuple): The RGB color of the LED (e.g., (255, 255, 255) for white).
+        pixel_data (bytes): RGB pixel data as bytes.
+    Returns:
+        bytes: A complete DDP packet.
     """
-    api_endpoint = f"http://{WLED_IP}/json/state"
+    # DDP header (10 bytes)
+    header = bytearray(10)
+    header[0] = 0x41  # Flags: Version 1, standard DDP
+    header[1] = 0x00  # Reserved
+    header[2:4] = (0).to_bytes(2, byteorder='big')  # Data offset
+    header[4:8] = (0).to_bytes(4, byteorder='big')  # Application ID
+    header[8:10] = len(pixel_data).to_bytes(2, byteorder='big')  # Data length
 
-    # Build the JSON payload for the current LED
-    json_data = {
-        "seg": [
-            {
-                "start": 0,
-                "stop": NUM_LEDS,
-                "i": [[current_led, *color]],
-                "on": True
-            }
-        ]
-    }
+    return header + pixel_data
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(api_endpoint, json=json_data) as response:
-            if response.status == 200:
-                print(f"Successfully lit up LED {current_led} with color {color}")
+async def fps_loop_ddp(fps=30):
+    """
+    Continuously sends the current LED state to WLED as optimized DDP packets.
+    Args:
+        fps (int): Frames per second.
+    """
+    udp_ip = WLED_IP
+    udp_port = 4048  # Default DDP port
+    delay = 1 / fps
+
+    # Create a UDP socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    while True:
+        # Prepare pixel data (RGB values for all LEDs)
+        pixel_data = bytearray()
+        for i in range(NUM_LEDS):
+            if i in led_state:
+                r, g, b, _ = led_state[i]  # Extract RGB values
+                pixel_data.extend([r, g, b])
             else:
-                print(f"Failed to light up LED {current_led}: {response.status} - {await response.text()}")
+                pixel_data.extend([0, 0, 0])  # Default to black/off
 
-async def set_leds_fade(led_indices, color, fade_steps=10, fade_delay=0.001):
+        # Create the DDP packet
+        ddp_packet = create_ddp_packet(pixel_data)
+
+        # Send the DDP packet via UDP
+        sock.sendto(ddp_packet, (udp_ip, udp_port))
+
+        # Wait for the next frame
+        await asyncio.sleep(delay)
+
+
+async def fade_leds(fade_delay=0.05):
     """
-    Light up multiple LEDs with a fade effect.
+    Gradually dims LEDs in the shared state based on fade steps.
     Args:
-        led_indices (list): List of LED indices to light up.
-        color (tuple): The RGB color of the LEDs (e.g., (255, 0, 0)).
-        fade_steps (int): Number of steps for fading out.
-        fade_delay (float): Delay between fade steps in seconds.
+        fade_delay (float): Time between fade steps (seconds).
     """
-    
-    print(f"Light Fade Function Start = {time.perf_counter()}")
-    
-    api_endpoint = f"http://{WLED_IP}/json/state"
+    while True:
+        for led_index in list(led_state.keys()):
+            color = led_state[led_index]
+            if color[3] > 0:  # Check if fade steps remain
+                fade_steps = color[3]
+                led_state[led_index][:3] = [int(c * fade_steps / (fade_steps + 1)) for c in color[:3]]
+                led_state[led_index][3] -= 1
+            else:
+                del led_state[led_index]  # Remove LED when fade is complete
 
-    for step in range(fade_steps, -1, -1):
-        adjusted_color = tuple(int(c * step / fade_steps) for c in color)
-
-        # Create a full LED payload for the entire strip
-        full_led_payload = [rgb_to_hex((0, 0, 0))] * NUM_LEDS
-        for index in led_indices:
-            full_led_payload[index] = rgb_to_hex(adjusted_color)
-
-        # Build the JSON payload with the entire strip state
-        json_data = {
-            "seg": [
-                {
-                    "start": 0,
-                    "stop": NUM_LEDS,
-                    "i": full_led_payload,
-                    "on": True
-                }
-            ]
-        }
-        print(f"HTTP Session Start = {time.perf_counter()}")
-        async with aiohttp.ClientSession() as session:
-            
-            print(f"HTTP POST Start = {time.perf_counter()}")
-            async with session.post(api_endpoint, json=json_data) as response:
-                if response.status != 200:
-                    print(f"Failed to set LEDs: {response.status} - {await response.text()}")
-            print(f"HTTP POST End = {time.perf_counter()}")
-                
         await asyncio.sleep(fade_delay)
-        print(f"HTTP Session End = {time.perf_counter()}")
-        print(f"Light Fade Function End = {time.perf_counter()}")
+
+
+def set_leds(led_index, color, fade_steps=None):
+    """
+    Activate or update a specific LED in the shared state.
+    Args:
+        led_index (int): Index of the LED to update.
+        color (tuple): RGB color of the LED.
+        fade_steps (int, optional): Number of fade steps. Defaults to None (no fading).
+    """
+    if fade_steps:
+        led_state[led_index] = [*color, fade_steps]  # Add fade steps
+    else:
+        led_state[led_index] = [*color, 0]  # No fade steps
+# endregion
+        
+
 
 def calculate_leds_to_light(controller_position, controller_direction, led_positions, calibration_data=None):
     """
@@ -248,48 +264,40 @@ async def main():
             return
 
         print("Point your controller to light up LEDs. Press Ctrl+C to stop.")
+
+        # Start FPS loop and fading logic
+        asyncio.create_task(fps_loop_ddp(fps=30))
+        asyncio.create_task(fade_leds(fade_delay=0.05))
+
         while True:
             poses = vr_system.getDeviceToAbsoluteTrackingPose(
                 openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
             )
-            
+
             for device_index, pose in enumerate(poses):
                 if pose.bDeviceIsConnected and pose.bPoseIsValid:
                     device_class = vr_system.getTrackedDeviceClass(device_index)
-                    
+
                     if device_class == openvr.TrackedDeviceClass_Controller:
                         matrix = pose.mDeviceToAbsoluteTracking
                         position = extract_position(matrix)
                         direction = extract_orientation(matrix)
 
-                        # Debugging: Visualize the line
-                        if ENABLE_DEBUG:
-                            visualize_line(position, direction)
-
                         # Calculate which LEDs to light up
-                        print(f"LED Light Start = {time.perf_counter()}")
-                        
                         lit_leds = calculate_leds_to_light(position, direction, led_positions)
-                        
 
-                        # Debugging: Output lit LEDs
-                        if ENABLE_DEBUG and lit_leds:
-                            print(f"Lit LEDs: {lit_leds}")
+                        # Update shared state with new LEDs
+                        for led in lit_leds:
+                            set_leds(led, (255, 0, 0), fade_steps=20)  # Red color with fade
 
-                        # Light up the LEDs with fade during load
-                        if choice == "load" and lit_leds:
-                            await set_leds_fade(lit_leds, [255, 0, 0])  # Red color
-                        elif lit_leds:
-                            for led in lit_leds:
-                                await set_leds(led, [255, 0, 0])  # Red color
-                                
-                        print(f"LED Light End = {time.perf_counter()}")
+            await asyncio.sleep(0.01)
 
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
         openvr.shutdown()
-# endregion
+
 
 if __name__ == "__main__":
     asyncio.run(main())
+# endregion
