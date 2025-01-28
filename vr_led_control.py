@@ -11,6 +11,9 @@ import socket
 WLED_IP = "192.168.1.186"  # Replace with your WLED IP
 NUM_LEDS = 358  # Total number of LEDs on the strip
 
+# SteamVR Settings
+POINTER_ACCURACY = .9999  #Must be a float less than 1, the larger the number the more precise the virtual pointer is, the smaller lights more LEDs at a time
+
 # Shared state for LED management
 led_state = defaultdict(lambda: [0, 0, 0, 0])  # Tracks [R, G, B, fade_steps] for each LED
 
@@ -65,7 +68,7 @@ def create_ddp_packet(pixel_data):
 
     return header + pixel_data
 
-async def fps_loop_ddp(fps=30):
+async def fps_loop_ddp(fps=60):
     """
     Continuously sends the current LED state to WLED as optimized DDP packets.
     Args:
@@ -156,7 +159,7 @@ def calculate_leds_to_light(controller_position, controller_direction, led_posit
 
         # Compare direction vectors
         dot_product = np.dot(controller_direction_2d, to_led_2d)
-        if dot_product > 0.98:  # Adjust threshold to control ray match sensitivity
+        if dot_product > POINTER_ACCURACY:  # Adjust threshold to control ray match sensitivity
             lit_leds.append(led_index)
 
     return lit_leds
