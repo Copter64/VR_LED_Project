@@ -1,0 +1,7 @@
+# requirements.txt
+
+# Core dependencies
+numpy==1.23.5          # For matrix and vector calculations
+openvr==1.16.0801      # For VR controller support
+aiohttp==3.8.4         # For asynchronous HTTP requests (if needed)
+asyncio==3.4.3         # For asynchronous programming
