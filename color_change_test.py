@@ -12,7 +12,7 @@ WLED_IP = "192.168.1.186"  # Replace with your WLED IP
 NUM_LEDS = 358  # Total number of LEDs on the strip
 
 # SteamVR Settings
-POINTER_ACCURACY = .9999  #Must be a float less than 1, the larger the number the more precise the virtual pointer is, the smaller lights more LEDs at a time
+POINTER_ACCURACY = .9999  # Must be a float less than 1, the larger the number the more precise the virtual pointer is, the smaller lights more LEDs at a time
 
 # Shared state for LED management
 led_state = defaultdict(lambda: [0, 0, 0, 0])  # Tracks [R, G, B, fade_steps] for each LED
@@ -23,6 +23,9 @@ LED_MAPPING_FILE = "led_mapping.json"
 # Debugging and Visualization Options
 ENABLE_DEBUG = False
 ENABLE_VISUALIZATION = False
+
+# Color settings
+current_color = (255, 0, 100)  # Default color
 
 # region: Helper Functions
 def extract_position(matrix):
@@ -35,14 +38,14 @@ def extract_orientation(matrix):
     forward_vector = np.array([matrix[0][2], matrix[1][2], matrix[2][2]])
     return forward_vector
 
-def is_trigger_pressed(vr_system, controller_index):
-    """Checks if the trigger button is pressed on a specific controller."""
+def is_button_pressed(vr_system, controller_index, button_id):
+    """Checks if a specific button is pressed on a specific controller."""
     success, controller_state = vr_system.getControllerState(controller_index)
     if not success:
         return False
-    # Check if the trigger button is pressed
-    trigger_mask = 1 << openvr.k_EButton_SteamVR_Trigger
-    return controller_state.ulButtonPressed & trigger_mask != 0
+    # Check if the button is pressed
+    button_mask = 1 << button_id
+    return controller_state.ulButtonPressed & button_mask != 0
 
 def rgb_to_hex(rgb):
     """
@@ -100,7 +103,6 @@ async def fps_loop_ddp(fps=60):
         # Wait for the next frame
         await asyncio.sleep(delay)
 
-
 async def fade_leds(fade_delay=0.05):
     """
     Gradually dims LEDs in the shared state based on fade steps.
@@ -119,7 +121,6 @@ async def fade_leds(fade_delay=0.05):
 
         await asyncio.sleep(fade_delay)
 
-
 def set_leds(led_index, color, fade_steps=None):
     """
     Activate or update a specific LED in the shared state.
@@ -133,8 +134,6 @@ def set_leds(led_index, color, fade_steps=None):
     else:
         led_state[led_index] = [*color, 0]  # No fade steps
 # endregion
-        
-
 
 def calculate_leds_to_light(controller_position, controller_direction, led_positions, calibration_data=None):
     """
@@ -164,7 +163,6 @@ def calculate_leds_to_light(controller_position, controller_direction, led_posit
 
     return lit_leds
 
-
 def load_led_positions():
     """Load previously saved LED positions."""
     try:
@@ -181,7 +179,6 @@ def visualize_line(position, direction):
     print(f"  Direction: {direction}")
 
 # endregion
-
 
 # region: LED Mapping
 async def map_led_positions(vr_system):
@@ -216,7 +213,7 @@ async def map_led_positions(vr_system):
                             print(f"LED {current_led}: Controller Position: {position}")
 
                             # Check if the trigger is pressed and debounce
-                            if is_trigger_pressed(vr_system, device_index):
+                            if is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
                                 current_time = time.time()
                                 if current_time - last_trigger_time > debounce_time:
                                     # Save position and move to next LED
@@ -244,7 +241,6 @@ async def map_led_positions(vr_system):
     return mapped_positions
 # endregion
 
-
 # region: Main Program
 async def main():
     """Main program to map LEDs and light them up based on controller position."""
@@ -268,8 +264,11 @@ async def main():
 
         print("Point your controller to light up LEDs. Press Ctrl+C to stop.")
 
+        # Initialize current_color
+        current_color = (255, 0, 100)  # Default color
+
         # Start FPS loop and fading logic
-        asyncio.create_task(fps_loop_ddp(fps=30))
+        asyncio.create_task(fps_loop_ddp(fps=60))
         asyncio.create_task(fade_leds(fade_delay=0.05))
 
         while True:
@@ -286,12 +285,20 @@ async def main():
                         position = extract_position(matrix)
                         direction = extract_orientation(matrix)
 
+                        # Check for button presses to change color
+                        if is_button_pressed(vr_system, device_index, openvr.k_EButton_Grip):
+                            current_color = (0, 255, 0)  # Green
+                        elif is_button_pressed(vr_system, device_index, openvr.k_EButton_ApplicationMenu):
+                            current_color = (0, 0, 255)  # Blue
+                        elif is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
+                            current_color = (255, 0, 0)  # Red
+
                         # Calculate which LEDs to light up
                         lit_leds = calculate_leds_to_light(position, direction, led_positions)
 
                         # Update shared state with new LEDs
                         for led in lit_leds:
-                            set_leds(led, (255, 0, 0), fade_steps=20)  # Red color with fade
+                            set_leds(led, current_color, fade_steps=20)
 
             await asyncio.sleep(0.01)
 
@@ -299,7 +306,6 @@ async def main():
         print("Exiting...")
     finally:
         openvr.shutdown()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
