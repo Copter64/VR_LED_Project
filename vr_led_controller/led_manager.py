@@ -2,26 +2,24 @@ import json
 import numpy as np
 from collections import defaultdict
 from config import NUM_LEDS, LED_MAPPING_FILE, POINTER_ACCURACY
+import socket
+from config import WLED_IP, NUM_LEDS
+
+# Define UDP socket
+udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+udp_port = 4048  # Default DDP port
 
 # Shared state for LED management
 led_state = defaultdict(lambda: [0, 0, 0, 0])  # Tracks [R, G, B, fade_steps] for each LED
 
 def create_ddp_packet(pixel_data):
-    """
-    Create a DDP packet with the given pixel data.
-    Args:
-        pixel_data (bytes): RGB pixel data as bytes.
-    Returns:
-        bytes: A complete DDP packet.
-    """
-    # DDP header (10 bytes)
+    """Creates a DDP packet for sending LED data."""
     header = bytearray(10)
     header[0] = 0x41  # Flags: Version 1, standard DDP
     header[1] = 0x00  # Reserved
     header[2:4] = (0).to_bytes(2, byteorder='big')  # Data offset
     header[4:8] = (0).to_bytes(4, byteorder='big')  # Application ID
     header[8:10] = len(pixel_data).to_bytes(2, byteorder='big')  # Data length
-
     return header + pixel_data
 
 async def fps_loop_ddp(fps=60):
@@ -79,19 +77,31 @@ async def fade_leds(fade_delay=0.05):
                 del led_state[led_index]  # Remove LED when fade is complete
 
         await asyncio.sleep(fade_delay)
+        
+def send_led_update():
+    """Immediately sends the updated LED state to WLED."""
+    pixel_data = bytearray()
+    for i in range(NUM_LEDS):
+        if i in led_state:
+            r, g, b, _ = led_state[i]
+            pixel_data.extend([r, g, b])
+        else:
+            pixel_data.extend([0, 0, 0])  # Default to black/off
+
+    ddp_packet = create_ddp_packet(pixel_data)
+    udp_socket.sendto(ddp_packet, (WLED_IP, udp_port))
 
 def set_leds(led_index, color, fade_steps=None):
     """
     Activate or update a specific LED in the shared state.
-    Args:
-        led_index (int): Index of the LED to update.
-        color (tuple): RGB color of the LED.
-        fade_steps (int, optional): Number of fade steps. Defaults to None (no fading).
+    Immediately updates WLED.
     """
     if fade_steps:
-        led_state[led_index] = [*color, fade_steps]  # Add fade steps
+        led_state[led_index] = [*color, fade_steps]
     else:
-        led_state[led_index] = [*color, 0]  # No fade steps
+        led_state[led_index] = [*color, 0]
+
+    send_led_update()  # Force immediate update
 
 def calculate_leds_to_light(controller_position, controller_direction, led_positions, calibration_data=None):
     """

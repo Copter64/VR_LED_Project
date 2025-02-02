@@ -13,4 +13,4 @@ ENABLE_DEBUG = False
 ENABLE_VISUALIZATION = False
 
 # Color settings
-current_color = (255, 0, 100)  # Default color
+current_color = (255, 255, 0)  # Default color
