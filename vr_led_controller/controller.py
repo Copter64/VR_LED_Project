@@ -34,7 +34,15 @@ class Controller:
 
     def check_inputs(self):
         """Check button inputs to change color."""
-        if is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip):
+        if is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
+            self.color = (255, 255, 255)  # White
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
+            self.color = (255, 0, 255)  # Pink
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
+            self.color = (255, 255, 0)  # Yellow
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger):
+            self.color = (0, 255, 255)  # Cyan
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip):
             self.color = (0, 255, 0)  # Green
         elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
             self.color = (0, 0, 255)  # Blue
