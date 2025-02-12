@@ -1,24 +1,25 @@
 import asyncio
 import openvr
-from config import current_color
-from led_manager import load_led_positions, calculate_leds_to_light, set_leds, fps_loop_ddp, fade_leds
+# from config import current_color
+from led_manager import load_led_positions, fps_loop_ddp, fade_leds
 from vr_manager import map_led_positions
-from helpers import extract_position, extract_orientation, is_button_pressed
+# from helpers import extract_position, extract_orientation, is_button_pressed
 from controller import Controller
 
 
 async def main():
     """Main program to track multiple VR controllers independently."""
     openvr.init(openvr.VRApplication_Scene)
-    
-    print("Starting fps_loop_ddp...")
-    asyncio.create_task(fps_loop_ddp(fps=60))
-    asyncio.create_task(fade_leds(fade_delay=0.05))
-    # Start background tasks for LED updates
-    print("LED update tasks created.")
         
     try:
         vr_system = openvr.VRSystem()
+        
+        print("Starting fps_loop_ddp...")
+        asyncio.create_task(fps_loop_ddp(fps=60))
+        asyncio.create_task(fade_leds(fade_delay=0.05))
+        # Start background tasks for LED updates
+        print("LED update tasks created.")
+        
         print("Do you want to map LEDs or load an existing map? (map/load)")
         choice = input().strip().lower()
 

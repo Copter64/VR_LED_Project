@@ -1,7 +1,7 @@
 import json
 import numpy as np
 from collections import defaultdict
-from config import NUM_LEDS, LED_MAPPING_FILE, POINTER_ACCURACY
+from config import NUM_LEDS, LED_MAPPING_FILE, POINTER_ACCURACY, ENABLE_DEBUG
 
 # Shared state for LED management
 led_state = defaultdict(lambda: [0, 0, 0, 0])  # Tracks [R, G, B, fade_steps] for each LED
@@ -38,7 +38,8 @@ async def fps_loop_ddp(fps=60):
         udp_ip = WLED_IP
         udp_port = 4048  # Default DDP port
         delay = 1 / fps
-        print("fps_loop_ddp started")
+        if ENABLE_DEBUG:
+            print("fps_loop_ddp started")
         # Create a UDP socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -83,7 +84,7 @@ async def fade_leds(fade_delay=0.05):
 
         await asyncio.sleep(fade_delay)
 
-async def set_leds(led_index, color, fade_steps=None):
+def set_leds(led_index, color, fade_steps=None):
     """
     Activate or update a specific LED in the shared state.
     Args:

@@ -27,7 +27,7 @@ async def map_led_positions(vr_system):
                     openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
                 )
                 await asyncio.sleep(0)  # Allow other tasks to run
-                await set_leds(current_led, (255, 255, 255))  # White color for mapping
+                set_leds(current_led, (255, 255, 255))  # White color for mapping
 
 
                 for device_index, pose in enumerate(poses):
@@ -50,7 +50,7 @@ async def map_led_positions(vr_system):
                                     print(f"Mapped LED {current_led} to position {position}")
 
                                     # Turn off the current LED
-                                    await set_leds(current_led, (0, 0, 0))  # Turn off the current LED
+                                    set_leds(current_led, (0, 0, 0))  # Turn off the current LED
 
                                     # Move to the next LED
                                     current_led += 1
