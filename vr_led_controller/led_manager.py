@@ -30,36 +30,39 @@ async def fps_loop_ddp(fps=60):
     Args:
         fps (int): Frames per second.
     """
-    from config import WLED_IP
-    import socket
-    import asyncio
+    try:
+        from config import WLED_IP
+        import socket
+        import asyncio
 
-    udp_ip = WLED_IP
-    udp_port = 4048  # Default DDP port
-    delay = 1 / fps
+        udp_ip = WLED_IP
+        udp_port = 4048  # Default DDP port
+        delay = 1 / fps
+        print("fps_loop_ddp started")
+        # Create a UDP socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    # Create a UDP socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        while True:
+            # Prepare pixel data (RGB values for all LEDs)
+            pixel_data = bytearray()
+            for i in range(NUM_LEDS):
+                if i in led_state:
+                    r, g, b, _ = led_state[i]  # Extract RGB values
+                    pixel_data.extend([r, g, b])
+                else:
+                    pixel_data.extend([0, 0, 0])  # Default to black/off
 
-    while True:
-        # Prepare pixel data (RGB values for all LEDs)
-        pixel_data = bytearray()
-        for i in range(NUM_LEDS):
-            if i in led_state:
-                r, g, b, _ = led_state[i]  # Extract RGB values
-                pixel_data.extend([r, g, b])
-            else:
-                pixel_data.extend([0, 0, 0])  # Default to black/off
+            # Create the DDP packet
+            ddp_packet = create_ddp_packet(pixel_data)
 
-        # Create the DDP packet
-        ddp_packet = create_ddp_packet(pixel_data)
+            # Send the DDP packet via UDP
+            sock.sendto(ddp_packet, (udp_ip, udp_port))
 
-        # Send the DDP packet via UDP
-        sock.sendto(ddp_packet, (udp_ip, udp_port))
-
-        # Wait for the next frame
-        await asyncio.sleep(delay)
-
+            # Wait for the next frame
+            await asyncio.sleep(delay)
+    except Exception as e:
+        print(f"fps_loop_ddp crashed: {e}")
+            
 async def fade_leds(fade_delay=0.05):
     """
     Gradually dims LEDs in the shared state based on fade steps.
@@ -80,7 +83,7 @@ async def fade_leds(fade_delay=0.05):
 
         await asyncio.sleep(fade_delay)
 
-def set_leds(led_index, color, fade_steps=None):
+async def set_leds(led_index, color, fade_steps=None):
     """
     Activate or update a specific LED in the shared state.
     Args:

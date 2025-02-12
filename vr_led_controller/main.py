@@ -6,9 +6,17 @@ from vr_manager import map_led_positions
 from helpers import extract_position, extract_orientation, is_button_pressed
 from controller import Controller
 
+
 async def main():
     """Main program to track multiple VR controllers independently."""
     openvr.init(openvr.VRApplication_Scene)
+    
+    print("Starting fps_loop_ddp...")
+    asyncio.create_task(fps_loop_ddp(fps=60))
+    asyncio.create_task(fade_leds(fade_delay=0.05))
+    # Start background tasks for LED updates
+    print("LED update tasks created.")
+        
     try:
         vr_system = openvr.VRSystem()
         print("Do you want to map LEDs or load an existing map? (map/load)")
@@ -26,10 +34,6 @@ async def main():
             return
 
         print("Tracking controllers... Press Ctrl+C to stop.")
-
-        # Start background tasks for LED updates
-        asyncio.create_task(fps_loop_ddp(fps=60))
-        asyncio.create_task(fade_leds(fade_delay=0.05))
 
         # Initialize controllers dynamically
         controllers = []
@@ -56,4 +60,5 @@ async def main():
         openvr.shutdown()
 
 if __name__ == "__main__":
+    print("Starting LED update tasks...")
     asyncio.run(main())

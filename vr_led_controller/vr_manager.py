@@ -3,7 +3,8 @@ import time
 import json
 from helpers import extract_position, extract_orientation, is_button_pressed
 from led_manager import set_leds
-from config import NUM_LEDS, LED_MAPPING_FILE
+from config import NUM_LEDS, LED_MAPPING_FILE, ENABLE_DEBUG
+import asyncio
 
 async def map_led_positions(vr_system):
     """Map the physical positions of LEDs using the controller."""
@@ -19,12 +20,15 @@ async def map_led_positions(vr_system):
         while current_led < NUM_LEDS:
             # Light up only the current LED
             print(f"Lighting up LED {current_led} for mapping...")
-            await set_leds(current_led, (255, 255, 255))  # White color for mapping
 
             while True:
+
                 poses = vr_system.getDeviceToAbsoluteTrackingPose(
                     openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
                 )
+                await asyncio.sleep(0)  # Allow other tasks to run
+                await set_leds(current_led, (255, 255, 255))  # White color for mapping
+
 
                 for device_index, pose in enumerate(poses):
                     if pose.bDeviceIsConnected and pose.bPoseIsValid:
@@ -34,7 +38,8 @@ async def map_led_positions(vr_system):
                             matrix = pose.mDeviceToAbsoluteTracking
                             position = extract_position(matrix)
 
-                            print(f"LED {current_led}: Controller Position: {position}")
+                            if ENABLE_DEBUG:
+                                print(f"LED {current_led}: Controller Position: {position}")
 
                             # Check if the trigger is pressed and debounce
                             if is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
