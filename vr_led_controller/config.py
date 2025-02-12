@@ -1,5 +1,5 @@
 # WLED Configuration
-WLED_IP = "192.168.1.186"  # Replace with your WLED IP
+WLED_IP = "192.168.1.114"  # Replace with your WLED IP
 NUM_LEDS = 358  # Total number of LEDs on the strip
 
 # SteamVR Settings

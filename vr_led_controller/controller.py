@@ -2,6 +2,7 @@ import openvr
 from led_manager import calculate_leds_to_light, set_leds
 from helpers import extract_position, extract_orientation, is_button_pressed
 import config
+import asyncio
 
 class Controller:
     def __init__(self, vr_system, device_index, color=(255, 255, 255)):
