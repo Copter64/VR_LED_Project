@@ -60,5 +60,4 @@ async def main():
         openvr.shutdown()
 
 if __name__ == "__main__":
-    print("Starting LED update tasks...")
     asyncio.run(main())
