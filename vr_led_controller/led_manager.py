@@ -97,33 +97,46 @@ def set_leds(led_index, color, fade_steps=None):
     else:
         led_state[led_index] = [*color, 0]  # No fade steps
 
-def calculate_leds_to_light(controller_position, controller_direction, led_positions, calibration_data=None):
-    """
-    Calculate which LEDs to light up based on the controller's ray direction on a 2D plane (XZ).
-    """
+import json
+
+def calculate_leds_to_light(controller_position, controller_direction, led_positions):
+    """Calculate which LEDs to light up based on the controller's ray direction, applying calibration offset."""
+    
+    # Load calibration offset if available
+    try:
+        with open("calibration_data.json", "r") as f:
+            calibration = json.load(f)
+            offset = np.array(calibration["offset"])
+    except (FileNotFoundError, KeyError):
+        offset = np.array([0, 0, 0])  # Default offset (no adjustment)
+
+    # Apply calibration offset to controller direction
+    adjusted_direction = np.array(controller_direction) + offset
+    adjusted_direction /= np.linalg.norm(adjusted_direction)  # Normalize the direction
+
+    controller_position_2d = np.array([controller_position[0], controller_position[2]])
+    
     lit_leds = []
-
-    # Project controller position and direction onto the XZ plane
-    controller_position_2d = np.array([controller_position[0], controller_position[2]])  # X, Z only
-    controller_direction_2d = np.array([controller_direction[0], controller_direction[2]])  # X, Z only
-    controller_direction_2d /= np.linalg.norm(controller_direction_2d)  # Normalize direction vector
-
+    
     for led_index, led_position in led_positions.items():
         led_index = int(led_index)
-
-        # Project LED position onto the XZ plane
-        led_position_2d = np.array([led_position[0], led_position[2]])  # X, Z only
-
-        # Calculate the vector from the controller to the LED in 2D
+        led_position_2d = np.array([led_position[0], led_position[2]])
+        
+        # Calculate vector from controller to LED
         to_led_2d = led_position_2d - controller_position_2d
-        to_led_2d /= np.linalg.norm(to_led_2d)  # Normalize vector
+        to_led_2d /= np.linalg.norm(to_led_2d)
 
-        # Compare direction vectors
-        dot_product = np.dot(controller_direction_2d, to_led_2d)
-        if dot_product > POINTER_ACCURACY:  # Adjust threshold to control ray match sensitivity
+        # Compare to adjusted direction
+        dot_product = np.dot(adjusted_direction[:2], to_led_2d)
+        if dot_product > POINTER_ACCURACY:
             lit_leds.append(led_index)
-
+    
+    if ENABLE_DEBUG:
+        if lit_leds:
+            print(f"LEDs hit by controller: {lit_leds}")
     return lit_leds
+
+
 
 def load_led_positions():
     """Load previously saved LED positions."""
