@@ -1,5 +1,4 @@
 import numpy as np
-import openvr
 
 def extract_position(matrix):
     """Extracts position (translation) from a 4x4 transformation matrix."""

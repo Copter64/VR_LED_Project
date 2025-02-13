@@ -9,8 +9,8 @@ POINTER_ACCURACY = .9999  # Must be a float less than 1, the larger the number t
 LED_MAPPING_FILE = "led_mapping.json"
 
 # Debugging and Visualization Options
-ENABLE_DEBUG = False
+ENABLE_DEBUG = True
 ENABLE_VISUALIZATION = False
 
-# Color settings
-current_color = (255, 0, 100)  # Default color
+FADETIME = 10  # Time in seconds for LED fade transitions
+FADEDELAY = 0.05  # Delay in seconds between each fade step (Frame rate for fading)
