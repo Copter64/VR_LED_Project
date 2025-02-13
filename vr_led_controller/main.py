@@ -58,7 +58,8 @@ async def main():
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
-        openvr.shutdown()
+        # openvr.shutdown()
+        print("VR system shut down.")
 
 if __name__ == "__main__":
     asyncio.run(main())

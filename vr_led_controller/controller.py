@@ -1,8 +1,7 @@
 import openvr
 from led_manager import calculate_leds_to_light, set_leds
 from helpers import extract_position, extract_orientation, is_button_pressed
-import config
-import asyncio
+from config import FADETIME
 
 class Controller:
     def __init__(self, vr_system, device_index, color=(255, 255, 255)):
@@ -55,7 +54,7 @@ class Controller:
         if self.position is not None and self.direction is not None:
             lit_leds = calculate_leds_to_light(self.position, self.direction, led_positions)
             for led in lit_leds:
-                set_leds(led, self.color, fade_steps=60)  # Smooth transition
+                set_leds(led, self.color, fade_steps=FADETIME)  # Smooth transition
 
 
     def update(self, led_positions):
