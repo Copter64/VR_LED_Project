@@ -1,10 +1,10 @@
 import openvr
 from led_manager import calculate_leds_to_light, set_leds
-from helpers import extract_position, extract_orientation, is_button_pressed
-from config import FADETIME
+from helpers import extract_position, extract_orientation, is_button_pressed,correct_yaw
+from config import FADETIME,DEFAULT_COLOR
 
 class Controller:
-    def __init__(self, vr_system, device_index, color=(255, 255, 255)):
+    def __init__(self, vr_system, device_index, color=DEFAULT_COLOR):
         """
         Represents a VR controller that can interact with LEDs.
 
@@ -18,19 +18,29 @@ class Controller:
         self.color = color
         self.led_positions = {}
 
-    def update_position(self):
-        """Updates the controller's position and orientation in 3D space."""
+    def update_position(self, offset_distance=0.1):
         poses = self.vr_system.getDeviceToAbsoluteTrackingPose(
             openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
         )
-        
         pose = poses[self.device_index]
         if pose.bDeviceIsConnected and pose.bPoseIsValid:
             self.position = extract_position(pose.mDeviceToAbsoluteTracking)
-            self.direction = extract_orientation(pose.mDeviceToAbsoluteTracking)
+            # Extract the raw orientation from the controller's matrix.
+            raw_orientation = extract_orientation(pose.mDeviceToAbsoluteTracking)
+            # Correct only the yaw using our calibration helper.
+            self.direction = correct_yaw(raw_orientation)
+            # Compute the front position based on the corrected horizontal direction.
+            self.front_position = (
+                self.position[0] + self.direction[0] * offset_distance,
+                self.position[1] + self.direction[1] * offset_distance,
+                self.position[2] + self.direction[2] * offset_distance,
+            )
         else:
             self.position = None
             self.direction = None
+            self.front_position = None
+
+
 
     def check_inputs(self):
         """Check button inputs to change color."""
@@ -48,6 +58,23 @@ class Controller:
             self.color = (0, 0, 255)  # Blue
         elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger):
             self.color = (255, 0, 0)  # Red
+            
+    def set_color_input(self):
+        color_list = list(self.color)
+        if is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger):
+            color_list[0] += 1
+            if color_list[0] > 255:
+                color_list[0] = 0
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip):
+            color_list[1] += 1
+            if color_list[1] > 255:
+                color_list[1] = 0
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
+            color_list[2] += 1
+            if color_list[2] > 255:
+                color_list[2] = 0
+        print(f"Color Combo: Red:{color_list[0]}, Green:{color_list[1]}, Blue:{color_list[2]}")   
+        self.color = tuple(color_list)
 
     def update_leds(self, led_positions):
         """Determine which LEDs to light up based on the controller's position and direction."""
@@ -60,5 +87,5 @@ class Controller:
     def update(self, led_positions):
         """Run all update functions in sequence."""
         self.update_position()
-        self.check_inputs()
+        self.set_color_input()
         self.update_leds(led_positions)

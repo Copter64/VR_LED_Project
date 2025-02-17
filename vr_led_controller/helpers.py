@@ -4,11 +4,48 @@ def extract_position(matrix):
     """Extracts position (translation) from a 4x4 transformation matrix."""
     return matrix[0][3], matrix[1][3], matrix[2][3]
 
+
 def extract_orientation(matrix):
     """Extracts orientation (rotation) as a forward vector from a 4x4 transformation matrix."""
     # Forward vector is the third column of the matrix
-    forward_vector = np.array([matrix[0][2], matrix[1][2], matrix[2][2]])
+    forward_vector = np.array([matrix[0][0], matrix[1][0], matrix[2][0]])
     return forward_vector
+
+
+def correct_yaw(orientation):
+    """
+    Corrects the yaw of the provided orientation vector.
+    
+    The input orientation is assumed to be the raw 'front' vector.
+    This function projects the vector onto the horizontal (XZ) plane,
+    extracts its yaw angle, and then adds a fixed offset so that the
+    resulting vector has the desired horizontal direction.
+    
+    Calibration notes:
+      - With the previous calibration, a 0.855 rad offset (≈49°) made the ray come from the left.
+      - Reducing the offset to 0.65 rad (≈37°) should shift the ray toward the front.
+      
+    You can further fine-tune the `yaw_offset` value as needed.
+    """
+    # Project the orientation onto the horizontal plane (ignore Y)
+    horizontal = np.array([orientation[0], 0, orientation[2]])
+    norm = np.linalg.norm(horizontal)
+    if norm < 1e-6:
+        horizontal = np.array([0, 0, -1])
+        norm = 1.0
+    horizontal = horizontal / norm
+
+    # Compute the current yaw angle.
+    # Using atan2(x, -z) because we assume -Z is forward.
+    current_yaw = np.arctan2(horizontal[0], -horizontal[2])
+
+    # Adjust the yaw offset: try reducing it from 0.855 to 0.65 radians.
+    yaw_offset = -1.72  # Fine-tune this value to get the desired front direction.
+    corrected_yaw = current_yaw + yaw_offset
+
+    # Reconstruct the corrected horizontal unit vector.
+    corrected_vector = np.array([np.sin(corrected_yaw), 0, -np.cos(corrected_yaw)])
+    return corrected_vector
 
 def is_button_pressed(vr_system, controller_index, button_id):
     """Checks if a specific button is pressed on a specific controller."""
