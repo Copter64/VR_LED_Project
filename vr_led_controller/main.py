@@ -9,7 +9,7 @@ from controller import Controller
 
 async def main():
     """Main program to track multiple VR controllers independently."""
-    openvr.init(openvr.VRApplication_Scene)
+    openvr.init(openvr.VRApplication_Overlay)
         
     try:
         vr_system = openvr.VRSystem()

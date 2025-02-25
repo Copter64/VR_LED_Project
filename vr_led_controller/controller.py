@@ -30,9 +30,10 @@ class Controller():
             # Correct only the yaw using our calibration helper.
             role = self.vr_system.getControllerRoleForTrackedDeviceIndex(self.device_index)
             if role == openvr.TrackedControllerRole_RightHand:
-                self.direction = correct_yaw(raw_orientation,hand="right")  # Perform right-hand yaw adjustments
+                self.direction = correct_yaw(raw_orientation, hand="right")  # Perform right-hand yaw adjustments
+            
             elif role == openvr.TrackedControllerRole_LeftHand:
-                self.direction = correct_yaw(raw_orientation,hand="left")  # Perform left-hand yaw adjustments
+                self.direction = correct_yaw(raw_orientation, hand="left")  # Perform left-hand yaw adjustments
             else:
                 self.direction = raw_orientation
             
