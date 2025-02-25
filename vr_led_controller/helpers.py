@@ -12,7 +12,7 @@ def extract_orientation(matrix):
     return forward_vector
 
 
-def correct_yaw(orientation):
+def correct_yaw(orientation,hand=None):
     """
     Corrects the yaw of the provided orientation vector.
     
@@ -40,7 +40,12 @@ def correct_yaw(orientation):
     current_yaw = np.arctan2(horizontal[0], -horizontal[2])
 
     # Adjust the yaw offset: try reducing it from 0.855 to 0.65 radians.
-    yaw_offset = -1.72  # Fine-tune this value to get the desired front direction.
+    if hand == "left":
+        yaw_offset = -1.52  # Fine-tune this value to get the desired front direction for the left controller.
+        #1.54 left by a degree
+        #1.4 right by 2 degrees
+    elif hand == "right":
+        yaw_offset = -1.72  # Fine-tune this value to get the desired front direction for the right controller.
     corrected_yaw = current_yaw + yaw_offset
 
     # Reconstruct the corrected horizontal unit vector.

@@ -3,7 +3,7 @@ from led_manager import calculate_leds_to_light, set_leds
 from helpers import extract_position, extract_orientation, is_button_pressed,correct_yaw
 from config import FADETIME,DEFAULT_COLOR
 
-class Controller:
+class Controller():
     def __init__(self, vr_system, device_index, color=DEFAULT_COLOR):
         """
         Represents a VR controller that can interact with LEDs.
@@ -28,8 +28,14 @@ class Controller:
             # Extract the raw orientation from the controller's matrix.
             raw_orientation = extract_orientation(pose.mDeviceToAbsoluteTracking)
             # Correct only the yaw using our calibration helper.
-            self.direction = correct_yaw(raw_orientation)
-            # Compute the front position based on the corrected horizontal direction.
+            role = self.vr_system.getControllerRoleForTrackedDeviceIndex(self.device_index)
+            if role == openvr.TrackedControllerRole_RightHand:
+                self.direction = correct_yaw(raw_orientation,hand="right")  # Perform right-hand yaw adjustments
+            elif role == openvr.TrackedControllerRole_LeftHand:
+                self.direction = correct_yaw(raw_orientation,hand="left")  # Perform left-hand yaw adjustments
+            else:
+                self.direction = raw_orientation
+            
             self.front_position = (
                 self.position[0] + self.direction[0] * offset_distance,
                 self.position[1] + self.direction[1] * offset_distance,
