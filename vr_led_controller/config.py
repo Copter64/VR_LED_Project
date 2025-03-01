@@ -12,5 +12,7 @@ LED_MAPPING_FILE = "led_mapping.json"
 ENABLE_DEBUG = True
 ENABLE_VISUALIZATION = False
 
-FADETIME = 10  # Time in seconds for LED fade transitions
+FADETIME = 40  # Time in seconds for LED fade transitions
 FADEDELAY = 0.05  # Delay in seconds between each fade step (Frame rate for fading)
+
+DEFAULT_COLOR = (255, 255, 255)  # Default color for LEDs (White)

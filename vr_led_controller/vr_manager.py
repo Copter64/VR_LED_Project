@@ -1,7 +1,7 @@
 import openvr
 import time
 import json
-from helpers import extract_position, extract_orientation, is_button_pressed
+from helpers import extract_position, is_button_pressed
 from led_manager import set_leds
 from config import NUM_LEDS, LED_MAPPING_FILE, ENABLE_DEBUG
 import asyncio
