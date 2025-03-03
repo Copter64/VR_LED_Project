@@ -103,5 +103,5 @@ class Controller():
             color_list[2] += 1
             if color_list[2] > 255:
                 color_list[2] = 0
-        print(f"Color Combo: Red:{color_list[0]}, Green:{color_list[1]}, Blue:{color_list[2]}")   
+        # print(f"Color Combo: Red:{color_list[0]}, Green:{color_list[1]}, Blue:{color_list[2]}")   
         self.color = tuple(color_list)
