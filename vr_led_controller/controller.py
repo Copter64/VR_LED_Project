@@ -17,6 +17,8 @@ class Controller():
         self.device_index = device_index
         self.color = color
         self.led_positions = {}
+        self.function = None
+        self.current_position = None
 
     def update_position(self, offset_distance=0.1):
         poses = self.vr_system.getDeviceToAbsoluteTrackingPose(
@@ -47,9 +49,30 @@ class Controller():
             self.direction = None
             self.front_position = None
 
+    def update_leds(self, led_positions):
+        """Determine which LEDs to light up based on the controller's position and direction."""
+        if self.position is not None and self.direction is not None:
+            lit_leds = calculate_leds_to_light(self.position, self.direction, led_positions)
+            for led in lit_leds:
+                set_leds(led, self.color, fade_steps=FADETIME)  # Smooth transition
 
+    def update(self, led_positions):
+        """Run all update functions in sequence."""
+        self.update_position()
+        self.set_color_input()
+        self.update_leds(led_positions)
 
     def check_inputs(self):
+        """Check button inputs to change color."""
+        if is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip):
+            self.color = (0, 255, 0)  # Green
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
+            self.color = (0, 0, 255)  # Blue
+        elif is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger):
+            self.color = (255, 0, 0)  # Red
+
+    #functions used for testing colors etc
+    def check_inputs_color(self):
         """Check button inputs to change color."""
         if is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_SteamVR_Trigger) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_Grip) and is_button_pressed(self.vr_system, self.device_index, openvr.k_EButton_ApplicationMenu):
             self.color = (255, 255, 255)  # White
@@ -82,17 +105,3 @@ class Controller():
                 color_list[2] = 0
         print(f"Color Combo: Red:{color_list[0]}, Green:{color_list[1]}, Blue:{color_list[2]}")   
         self.color = tuple(color_list)
-
-    def update_leds(self, led_positions):
-        """Determine which LEDs to light up based on the controller's position and direction."""
-        if self.position is not None and self.direction is not None:
-            lit_leds = calculate_leds_to_light(self.position, self.direction, led_positions)
-            for led in lit_leds:
-                set_leds(led, self.color, fade_steps=FADETIME)  # Smooth transition
-
-
-    def update(self, led_positions):
-        """Run all update functions in sequence."""
-        self.update_position()
-        self.set_color_input()
-        self.update_leds(led_positions)

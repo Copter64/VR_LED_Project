@@ -1,14 +1,21 @@
 from controller import Controller
 from led_manager import load_led_positions, fps_loop_ddp, fade_leds
 from helpers import extract_position, extract_orientation, is_button_pressed
+from vr_manager import map_led_positions, vr_cursor_loop, vr_system_handler
 from dataclasses import dataclass
 from enum import Enum
 
+
 #Initial Game setup
 #Cursor Class? - Where the player is pointing
-def cursor():
-    Controller().update_position()
-    Controller().check_inputs()
+async def cursor():
+    vr_system = await vr_system_handler()
+    led_positions = load_led_positions()
+    if not led_positions:
+        print("No LED mapping data available. Exiting...")
+        return
+    await vr_cursor_loop(vr_system, led_positions)
+
 
 @dataclass
 class Color():
@@ -69,14 +76,14 @@ class GameManger():
         #Waits for player input
         pass
     
-def main():
+async def main():
     #Main function to run the game
     manager = GameManger()
     manager.start_game()
 
     while manager.inprogress:
         try:
-            cursor()
+            await cursor()
         except Exception as ex:
             print(ex)
         
