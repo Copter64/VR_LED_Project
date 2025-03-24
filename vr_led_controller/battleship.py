@@ -1,20 +1,19 @@
 import asyncio
 import openvr
-from collections import defaultdict
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from controller import Controller
 from led_manager import (
     load_led_positions, 
     set_leds, 
-    fade_leds, 
     create_ddp_packet, 
     calculate_leds_to_light, 
     led_state
 )
-from helpers import extract_position, extract_orientation, is_button_pressed
+from helpers import is_button_pressed
 from vr_manager import vr_system_handler
-from config import NUM_LEDS, WLED_IP, ENABLE_DEBUG
+from config import NUM_LEDS, WLED_IP
 
 # Global variables to hold the current cursor LED indices, the ship length during placement,
 # and a frozen target for a fired shot.
@@ -147,18 +146,27 @@ async def get_ship_placement(vr_system, led_positions, valid_led_set):
     Orientation is 'R' (ship placed rightward) or 'L' (if grip held, placed leftward).
     Uses the LED indexes directly.
     """
+    # Create Controller objects for all connected controllers.
+    controllers = []
+    poses = vr_system.getDeviceToAbsoluteTrackingPose(
+        openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
+    )
+    for device_index, pose in enumerate(poses):
+        if pose.bDeviceIsConnected and pose.bPoseIsValid:
+            if vr_system.getTrackedDeviceClass(device_index) == openvr.TrackedDeviceClass_Controller:
+                controllers.append(Controller(vr_system, device_index))
+                
     while True:
-        poses = vr_system.getDeviceToAbsoluteTrackingPose(
-            openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
-        )
-        for device_index, pose in enumerate(poses):
-            if pose.bDeviceIsConnected and pose.bPoseIsValid:
-                if is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
-                    position = extract_position(pose.mDeviceToAbsoluteTracking)
-                    direction = extract_orientation(pose.mDeviceToAbsoluteTracking)
-                    for led in calculate_leds_to_light(position, direction, led_positions):
+        for controller in controllers:
+            controller.update_position()  # This applies the corrected yaw
+            if controller.position is not None and controller.direction is not None:
+                if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_SteamVR_Trigger):
+                    for led in calculate_leds_to_light(controller.position, controller.direction, led_positions):
                         if led in valid_led_set:
-                            orientation = 'L' if is_button_pressed(vr_system, device_index, openvr.k_EButton_Grip) else 'R'
+                            orientation = (
+                                'L' if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_Grip)
+                                else 'R'
+                            )
                             return led, orientation
         await asyncio.sleep(0.1)
 
@@ -167,16 +175,22 @@ async def get_fire_target(vr_system, led_positions, valid_led_set):
     Wait for the player to aim at a valid opponent board cell and pull the trigger.
     Returns the LED index directly.
     """
+    # Create Controller objects for all connected controllers.
+    controllers = []
+    poses = vr_system.getDeviceToAbsoluteTrackingPose(
+        openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
+    )
+    for device_index, pose in enumerate(poses):
+        if pose.bDeviceIsConnected and pose.bPoseIsValid:
+            if vr_system.getTrackedDeviceClass(device_index) == openvr.TrackedDeviceClass_Controller:
+                controllers.append(Controller(vr_system, device_index))
+                
     while True:
-        poses = vr_system.getDeviceToAbsoluteTrackingPose(
-            openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
-        )
-        for device_index, pose in enumerate(poses):
-            if pose.bDeviceIsConnected and pose.bPoseIsValid:
-                if is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
-                    position = extract_position(pose.mDeviceToAbsoluteTracking)
-                    direction = extract_orientation(pose.mDeviceToAbsoluteTracking)
-                    for led in calculate_leds_to_light(position, direction, led_positions):
+        for controller in controllers:
+            controller.update_position()  # Ensure corrected yaw is applied
+            if controller.position is not None and controller.direction is not None:
+                if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_SteamVR_Trigger):
+                    for led in calculate_leds_to_light(controller.position, controller.direction, led_positions):
                         if led in valid_led_set:
                             return led
         await asyncio.sleep(0.1)
@@ -269,7 +283,10 @@ async def update_cursor_loop(vr_system, led_positions, valid_leds):
                 if candidates:
                     start = candidates[0]
                     if current_ship_length is not None:
-                        orientation = 'L' if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_Grip) else 'R'
+                        orientation = (
+                            'L' if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_Grip)
+                            else 'R'
+                        )
                         if orientation == 'R':
                             candidate_range = list(range(start, start + current_ship_length))
                         else:
@@ -377,6 +394,7 @@ class GameManager:
                 print(f"Miss at cell {cell}.")
             elif result == 'already':
                 print("Already fired on that cell. Try again.")
+                time.sleep(500)
                 continue
             if self.opponent.board.all_ships_sunk():
                 print(f"\n{self.current_player.name} wins! All enemy ships have been sunk.")
