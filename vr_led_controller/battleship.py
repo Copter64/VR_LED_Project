@@ -45,12 +45,13 @@ class Ship:
     positions: list = field(default_factory=list)  # List of board cell indexes
 
     def __post_init__(self):
+        
         if self.shiptype == ShipType.CARRIER:
-            self.length = 5
+            self.length = 10
         elif self.shiptype == ShipType.BATTLESHIP:
-            self.length = 4
+            self.length = 8
         elif self.shiptype == ShipType.SUBMARINE:
-            self.length = 3
+            self.length = 6
         self.remaining = self.length
 
 @dataclass
@@ -197,7 +198,7 @@ async def get_fire_target(vr_system, led_positions, valid_led_set):
 
 # ---------- Merged Display Update Functions ----------
 
-def update_display(game_manager, vr_system, led_positions):
+def update_display(game_manager):
     """
     Merges the status display and cursor updates:
       - For each cell in the target board (opponent’s board), map:
@@ -218,7 +219,7 @@ def update_display(game_manager, vr_system, led_positions):
         elif status == 'miss':
             color = (150, 255, 255)
         else:
-            color = (0, 0, 255)
+            color = game_manager.opponent.color.to_tuple()  # Use the opponent's background color
         led_state[i] = [*color, 0]
     # Overlay the dynamic cursor if no target is frozen.
     global frozen_target
@@ -242,7 +243,7 @@ async def merged_ddp_loop(vr_system, led_positions, game_manager, fps=60):
     delay = 1 / fps
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     while True:
-        update_display(game_manager, vr_system, led_positions)
+        update_display(game_manager)
         pixel_data = bytearray()
         for i in range(NUM_LEDS):
             if i in led_state:
@@ -305,12 +306,13 @@ class GameManager:
         self.vr_system = vr_system
         self.led_positions = led_positions
         self.board_size = board_size
-        self.player1 = Player(name="Player 1", board=Board(1, board_size))
-        self.player2 = Player(name="Player 2", board=Board(2, board_size))
+        self.player1 = Player(name="Player 1", board=Board(1, board_size), color=Color(50, 0, 255))
+        self.player2 = Player(name="Player 2", board=Board(2, board_size), color=Color(0, 50, 255))
         self.current_player = self.player1
         self.opponent = self.player2
         self.inprogress = False
-        self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP, ShipType.SUBMARINE]
+        self.ship_types = [ShipType.CARRIER] #keeping one ship for testing
+        # self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP, ShipType.SUBMARINE]
 
     def switch_turn(self):
         global frozen_target
@@ -394,7 +396,7 @@ class GameManager:
                 print(f"Miss at cell {cell}.")
             elif result == 'already':
                 print("Already fired on that cell. Try again.")
-                time.sleep(500)
+                frozen_target = None  # Clear the frozen target so the cursor updates resume
                 continue
             if self.opponent.board.all_ships_sunk():
                 print(f"\n{self.current_player.name} wins! All enemy ships have been sunk.")
@@ -428,7 +430,7 @@ async def main():
     board_size = NUM_LEDS
     game = GameManager(vr_system, led_positions, board_size)
     game.start_game()
-    asyncio.create_task(merged_ddp_loop(vr_system, led_positions, game, fps=60))
+    asyncio.create_task(merged_ddp_loop(vr_system, led_positions, game, fps=90))
     asyncio.create_task(update_cursor_loop(vr_system, led_positions, set(range(board_size))))
     await game.run()
 
