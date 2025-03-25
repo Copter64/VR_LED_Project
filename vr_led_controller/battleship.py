@@ -1,26 +1,26 @@
 import asyncio
 import openvr
-from collections import defaultdict
+import random
 from dataclasses import dataclass, field
 from enum import Enum
 from controller import Controller
 from led_manager import (
     load_led_positions, 
     set_leds, 
-    fade_leds, 
     create_ddp_packet, 
     calculate_leds_to_light, 
     led_state
 )
-from helpers import extract_position, extract_orientation, is_button_pressed
+from helpers import is_button_pressed
 from vr_manager import vr_system_handler
-from config import NUM_LEDS, WLED_IP, ENABLE_DEBUG
+from config import NUM_LEDS, WLED_IP
 
 # Global variables to hold the current cursor LED indices, the ship length during placement,
 # and a frozen target for a fired shot.
 cursor_leds = []
 current_ship_length = None  # Set when a ship is being placed
 frozen_target = None      # Set when a shot is fired to freeze the dynamic cursor
+animation_active = False    # Global flag to indicate an animation is active.
 
 # ---------- Game Data Structures ----------
 
@@ -46,12 +46,13 @@ class Ship:
     positions: list = field(default_factory=list)  # List of board cell indexes
 
     def __post_init__(self):
+        
         if self.shiptype == ShipType.CARRIER:
             self.length = 5
         elif self.shiptype == ShipType.BATTLESHIP:
-            self.length = 4
-        elif self.shiptype == ShipType.SUBMARINE:
             self.length = 3
+        elif self.shiptype == ShipType.SUBMARINE:
+            self.length = 2
         self.remaining = self.length
 
 @dataclass
@@ -147,18 +148,27 @@ async def get_ship_placement(vr_system, led_positions, valid_led_set):
     Orientation is 'R' (ship placed rightward) or 'L' (if grip held, placed leftward).
     Uses the LED indexes directly.
     """
+    # Create Controller objects for all connected controllers.
+    controllers = []
+    poses = vr_system.getDeviceToAbsoluteTrackingPose(
+        openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
+    )
+    for device_index, pose in enumerate(poses):
+        if pose.bDeviceIsConnected and pose.bPoseIsValid:
+            if vr_system.getTrackedDeviceClass(device_index) == openvr.TrackedDeviceClass_Controller:
+                controllers.append(Controller(vr_system, device_index))
+                
     while True:
-        poses = vr_system.getDeviceToAbsoluteTrackingPose(
-            openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
-        )
-        for device_index, pose in enumerate(poses):
-            if pose.bDeviceIsConnected and pose.bPoseIsValid:
-                if is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
-                    position = extract_position(pose.mDeviceToAbsoluteTracking)
-                    direction = extract_orientation(pose.mDeviceToAbsoluteTracking)
-                    for led in calculate_leds_to_light(position, direction, led_positions):
+        for controller in controllers:
+            controller.update_position()  # This applies the corrected yaw
+            if controller.position is not None and controller.direction is not None:
+                if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_SteamVR_Trigger):
+                    for led in calculate_leds_to_light(controller.position, controller.direction, led_positions):
                         if led in valid_led_set:
-                            orientation = 'L' if is_button_pressed(vr_system, device_index, openvr.k_EButton_Grip) else 'R'
+                            orientation = (
+                                'L' if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_Grip)
+                                else 'R'
+                            )
                             return led, orientation
         await asyncio.sleep(0.1)
 
@@ -167,23 +177,94 @@ async def get_fire_target(vr_system, led_positions, valid_led_set):
     Wait for the player to aim at a valid opponent board cell and pull the trigger.
     Returns the LED index directly.
     """
+    # Create Controller objects for all connected controllers.
+    controllers = []
+    poses = vr_system.getDeviceToAbsoluteTrackingPose(
+        openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
+    )
+    for device_index, pose in enumerate(poses):
+        if pose.bDeviceIsConnected and pose.bPoseIsValid:
+            if vr_system.getTrackedDeviceClass(device_index) == openvr.TrackedDeviceClass_Controller:
+                controllers.append(Controller(vr_system, device_index))
+                
     while True:
-        poses = vr_system.getDeviceToAbsoluteTrackingPose(
-            openvr.TrackingUniverseStanding, 0, openvr.k_unMaxTrackedDeviceCount
-        )
-        for device_index, pose in enumerate(poses):
-            if pose.bDeviceIsConnected and pose.bPoseIsValid:
-                if is_button_pressed(vr_system, device_index, openvr.k_EButton_SteamVR_Trigger):
-                    position = extract_position(pose.mDeviceToAbsoluteTracking)
-                    direction = extract_orientation(pose.mDeviceToAbsoluteTracking)
-                    for led in calculate_leds_to_light(position, direction, led_positions):
+        for controller in controllers:
+            controller.update_position()  # Ensure corrected yaw is applied
+            if controller.position is not None and controller.direction is not None:
+                if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_SteamVR_Trigger):
+                    for led in calculate_leds_to_light(controller.position, controller.direction, led_positions):
                         if led in valid_led_set:
                             return led
         await asyncio.sleep(0.1)
 
 # ---------- Merged Display Update Functions ----------
 
-def update_display(game_manager, vr_system, led_positions):
+async def animate_victory(board_size, duration_flash=0.5, duration_confetti=3.0, flash_color=(255, 255, 255), confetti_colors=None, steps=30):
+    """
+    Animate a victory sequence with a quick flash followed by a confetti effect.
+    
+    Args:
+        board_size (int): Total number of LED cells.
+        duration_flash (float): Duration of the flash effect in seconds.
+        duration_confetti (float): Duration of the confetti effect in seconds.
+        flash_color (tuple): RGB color for the flash.
+        confetti_colors (list): List of RGB tuples to use for the confetti effect.
+        steps (int): Number of animation steps for the confetti effect.
+    """
+    global animation_active
+    if confetti_colors is None:
+        confetti_colors = [
+            (255, 0, 0),     # Red
+            (0, 255, 0),     # Green
+            (0, 0, 255),     # Blue
+            (255, 255, 0),   # Yellow
+            (255, 0, 255),   # Magenta
+            (0, 255, 255)    # Cyan
+        ]
+    
+    animation_active = True
+
+    # --- Flash Effect ---
+    # Set all LEDs to the flash_color.
+    for led in range(board_size):
+        led_state[led] = [*flash_color, 0]
+    await asyncio.sleep(duration_flash)
+
+    # --- Confetti Effect ---
+    confetti_step_delay = duration_confetti / steps
+    for _ in range(steps):
+        for led in range(board_size):
+            # Randomly choose one of the confetti colors.
+            color = random.choice(confetti_colors)
+            led_state[led] = [*color, 0]
+        await asyncio.sleep(confetti_step_delay)
+
+    # Clear the animation flag so that normal display resumes.
+    animation_active = False
+
+async def animate_sunk_ship(ship_positions, board_size, duration=2.0, steps=20):
+    """
+    Animate a sunk ship with an explosion at ship_positions and an outward shockwave.
+    """
+    global animation_active
+    animation_active = True
+    step_delay = duration / steps
+    for step in range(steps):
+        # Calculate your shockwave effect here, updating led_state based on the distance from ship_positions.
+        # For example, you might fade the color as the shockwave travels outwards.
+        for led in range(board_size):
+            # Compute a simple effect (customize as needed)
+            min_dist = min(abs(led - pos) for pos in ship_positions)
+            if min_dist <= step * (board_size // steps):
+                brightness = max(0, 1.0 - (min_dist / (step * (board_size // steps) + 1)))
+                # Update led_state[led] with your chosen explosion/shockwave color scaled by brightness.
+                led_state[led] = [int(255 * brightness), int(255 * brightness), 0, 0]
+        await asyncio.sleep(step_delay)
+    animation_active = False
+
+
+
+def update_display(game_manager):
     """
     Merges the status display and cursor updates:
       - For each cell in the target board (opponent’s board), map:
@@ -204,7 +285,7 @@ def update_display(game_manager, vr_system, led_positions):
         elif status == 'miss':
             color = (150, 255, 255)
         else:
-            color = (0, 0, 255)
+            color = game_manager.opponent.color.to_tuple()  # Use the opponent's background color
         led_state[i] = [*color, 0]
     # Overlay the dynamic cursor if no target is frozen.
     global frozen_target
@@ -222,13 +303,15 @@ async def merged_ddp_loop(vr_system, led_positions, game_manager, fps=60):
     """
     Merged DDP loop that sends the updated LED state as DDP packets.
     """
+
     import socket
     udp_ip = WLED_IP
     udp_port = 4048
     delay = 1 / fps
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     while True:
-        update_display(game_manager, vr_system, led_positions)
+        if not animation_active:
+            update_display(game_manager)
         pixel_data = bytearray()
         for i in range(NUM_LEDS):
             if i in led_state:
@@ -269,7 +352,10 @@ async def update_cursor_loop(vr_system, led_positions, valid_leds):
                 if candidates:
                     start = candidates[0]
                     if current_ship_length is not None:
-                        orientation = 'L' if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_Grip) else 'R'
+                        orientation = (
+                            'L' if is_button_pressed(controller.vr_system, controller.device_index, openvr.k_EButton_Grip)
+                            else 'R'
+                        )
                         if orientation == 'R':
                             candidate_range = list(range(start, start + current_ship_length))
                         else:
@@ -288,12 +374,13 @@ class GameManager:
         self.vr_system = vr_system
         self.led_positions = led_positions
         self.board_size = board_size
-        self.player1 = Player(name="Player 1", board=Board(1, board_size))
-        self.player2 = Player(name="Player 2", board=Board(2, board_size))
+        self.player1 = Player(name="Player 1", board=Board(1, board_size), color=Color(50, 0, 255))
+        self.player2 = Player(name="Player 2", board=Board(2, board_size), color=Color(0, 50, 255))
         self.current_player = self.player1
         self.opponent = self.player2
         self.inprogress = False
-        self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP, ShipType.SUBMARINE]
+        self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP]
+        # self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP, ShipType.SUBMARINE]
 
     def switch_turn(self):
         global frozen_target
@@ -319,7 +406,7 @@ class GameManager:
             print("Make sure your opponent is not watching. When ready, press the trigger to begin.")
             await wait_for_trigger(self.vr_system)
             for led in valid_leds:
-                set_leds(led, (0, 0, 255))
+                set_leds(led, (0, 255, 100))
             await asyncio.sleep(1)
             for ship_type in self.ship_types:
                 ship = Ship(shiptype=ship_type)
@@ -371,15 +458,21 @@ class GameManager:
                 set_leds(target_led, color)
                 print(f"Hit at cell {cell}!")
                 if result == 'sunk':
+                    ship = self.opponent.board.ship_cells.get(cell)
+                    if ship:
+                        await animate_sunk_ship(ship.positions, self.board_size)
                     print("Ship sunk!")
             elif result == 'miss':
                 set_leds(target_led, (255, 255, 255))
                 print(f"Miss at cell {cell}.")
             elif result == 'already':
                 print("Already fired on that cell. Try again.")
+                frozen_target = None  # Clear the frozen target so the cursor updates resume
                 continue
             if self.opponent.board.all_ships_sunk():
                 print(f"\n{self.current_player.name} wins! All enemy ships have been sunk.")
+                # Play the victory animation
+                await animate_victory(self.board_size)
                 self.inprogress = False
                 break
             self.switch_turn()
@@ -410,7 +503,7 @@ async def main():
     board_size = NUM_LEDS
     game = GameManager(vr_system, led_positions, board_size)
     game.start_game()
-    asyncio.create_task(merged_ddp_loop(vr_system, led_positions, game, fps=60))
+    asyncio.create_task(merged_ddp_loop(vr_system, led_positions, game, fps=90))
     asyncio.create_task(update_cursor_loop(vr_system, led_positions, set(range(board_size))))
     await game.run()
 
