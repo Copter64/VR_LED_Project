@@ -1,6 +1,7 @@
 import asyncio
 import openvr
 import random
+import audio_manager
 from dataclasses import dataclass, field
 from enum import Enum
 from controller import Controller
@@ -48,11 +49,11 @@ class Ship:
     def __post_init__(self):
         
         if self.shiptype == ShipType.CARRIER:
-            self.length = 5
+            self.length = 6
         elif self.shiptype == ShipType.BATTLESHIP:
-            self.length = 3
+            self.length = 4
         elif self.shiptype == ShipType.SUBMARINE:
-            self.length = 2
+            self.length = 3
         self.remaining = self.length
 
 @dataclass
@@ -262,7 +263,43 @@ async def animate_sunk_ship(ship_positions, board_size, duration=2.0, steps=20):
         await asyncio.sleep(step_delay)
     animation_active = False
 
+async def animate_hit_effect(cell_index, base_color=(255, 100, 20), duration=0.3, steps=5):
+    """
+    Briefly animates a hit effect on the target LED.
+    
+    Args:
+        cell_index (int): LED index where the hit occurred.
+        base_color (tuple): The base RGB color for the hit (default: warm orange).
+        duration (float): Total duration of the animation in seconds.
+        steps (int): Number of steps in the fade-out effect.
+    """
+    step_delay = duration / steps
+    # Save the original state if needed (or simply use black/off for revert)
+    for step in range(steps):
+        factor = 1.0 - (step / steps)  # Fades from full color to off
+        new_color = [int(base_color[i] * factor) for i in range(3)]
+        led_state[cell_index] = [*new_color, 0]
+        await asyncio.sleep(step_delay)
+    # Optionally, clear the LED after animation
+    led_state[cell_index] = [0, 0, 0, 0]
 
+async def animate_miss_effect(cell_index, base_color=(255, 255, 255), duration=0.3, steps=5):
+    """
+    Briefly animates a miss effect on the target LED.
+    
+    Args:
+        cell_index (int): LED index where the miss occurred.
+        base_color (tuple): The base RGB color for the miss (default: white).
+        duration (float): Total duration of the animation in seconds.
+        steps (int): Number of steps in the fade-out effect.
+    """
+    step_delay = duration / steps
+    for step in range(steps):
+        factor = 1.0 - (step / steps)
+        new_color = [int(base_color[i] * factor) for i in range(3)]
+        led_state[cell_index] = [*new_color, 0]
+        await asyncio.sleep(step_delay)
+    led_state[cell_index] = [0, 0, 0, 0]
 
 def update_display(game_manager):
     """
@@ -379,8 +416,7 @@ class GameManager:
         self.current_player = self.player1
         self.opponent = self.player2
         self.inprogress = False
-        self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP]
-        # self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP, ShipType.SUBMARINE]
+        self.ship_types = [ShipType.CARRIER, ShipType.BATTLESHIP, ShipType.SUBMARINE]
 
     def switch_turn(self):
         global frozen_target
@@ -440,15 +476,12 @@ class GameManager:
             await asyncio.sleep(3)
 
     async def game_loop(self):
-        """
-        Players alternate turns firing at the opponent's board.
-        A non-sunk hit is shown as warm white (255,200,150) and sunk as red; a miss is white.
-        When a shot is fired, the target is frozen so the hit appears at the aimed location.
-        """
         global frozen_target
         valid_leds = set(range(self.board_size))
         while self.inprogress:
             print(f"{self.current_player.name}'s turn to fire. Aim and pull the trigger.")
+            audio_manager.play_turn_start(self.current_player.name)  # Turn start sound
+            
             target_led = await get_fire_target(self.vr_system, self.led_positions, valid_leds)
             cell = target_led
             result = self.opponent.board.receive_shot(cell)
@@ -457,26 +490,36 @@ class GameManager:
                 color = (255, 0, 0) if result == 'sunk' else (255, 100, 20)
                 set_leds(target_led, color)
                 print(f"Hit at cell {cell}!")
+                audio_manager.play_hit_sound()
+                if result == 'hit':
+                    await animate_hit_effect(target_led)
                 if result == 'sunk':
+                    print("Ship sunk!")
+                    audio_manager.play_sunk_sound()
                     ship = self.opponent.board.ship_cells.get(cell)
                     if ship:
                         await animate_sunk_ship(ship.positions, self.board_size)
-                    print("Ship sunk!")
+                await asyncio.sleep(2)
             elif result == 'miss':
                 set_leds(target_led, (255, 255, 255))
                 print(f"Miss at cell {cell}.")
+                audio_manager.play_miss_sound()
+                await animate_miss_effect(target_led)
+                await asyncio.sleep(2)
             elif result == 'already':
                 print("Already fired on that cell. Try again.")
-                frozen_target = None  # Clear the frozen target so the cursor updates resume
+                frozen_target = None
+                await asyncio.sleep(.5)
                 continue
             if self.opponent.board.all_ships_sunk():
                 print(f"\n{self.current_player.name} wins! All enemy ships have been sunk.")
-                # Play the victory animation
+                audio_manager.play_victory_sound(self.current_player.name)
                 await animate_victory(self.board_size)
                 self.inprogress = False
                 break
             self.switch_turn()
             await asyncio.sleep(1)
+
 
     def start_game(self):
         self.inprogress = True
