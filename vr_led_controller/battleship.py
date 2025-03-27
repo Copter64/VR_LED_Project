@@ -487,16 +487,17 @@ class GameManager:
             result = self.opponent.board.receive_shot(cell)
             frozen_target = cell
             if result in ['hit', 'sunk']:
+                audio_manager.play_hit_sound()
                 color = (255, 0, 0) if result == 'sunk' else (255, 100, 20)
                 set_leds(target_led, color)
                 print(f"Hit at cell {cell}!")
-                audio_manager.play_hit_sound()
                 if result == 'hit':
                     await animate_hit_effect(target_led)
                 if result == 'sunk':
                     print("Ship sunk!")
-                    audio_manager.play_sunk_sound()
                     ship = self.opponent.board.ship_cells.get(cell)
+                    shiptype = ship.shiptype.name
+                    audio_manager.play_sunk_sound(shiptype)
                     if ship:
                         await animate_sunk_ship(ship.positions, self.board_size)
                 await asyncio.sleep(2)

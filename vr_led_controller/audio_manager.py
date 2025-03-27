@@ -23,8 +23,19 @@ def play_hit_sound():
 def play_miss_sound():
     play_sound(os.path.join(SOUNDS_FOLDER, "miss.wav"))
 
-def play_sunk_sound():
-    play_sound(os.path.join(SOUNDS_FOLDER, "sunk.wav"))
+
+def play_sunk_sound(shiptype):
+    if shiptype == "CARRIER":
+        play_sound(os.path.join(SOUNDS_FOLDER, "carrier_sunk.wav"))
+    if shiptype == "BATTLESHIP":
+        play_sound(os.path.join(SOUNDS_FOLDER, "battleship_sunk.wav"))
+    if shiptype == "CRUISER":
+        play_sound(os.path.join(SOUNDS_FOLDER, "cruiser_sunk.wav"))
+    if shiptype == "SUBMARINE":
+        play_sound(os.path.join(SOUNDS_FOLDER, "submarine_sunk.wav"))
+    if shiptype == "DESTROYER":
+        play_sound(os.path.join(SOUNDS_FOLDER, "destroyer_sunk.wav"))
+        
 
 def play_turn_start(player_name):
     if player_name == "Player 1":
