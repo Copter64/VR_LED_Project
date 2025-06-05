@@ -1,127 +1,123 @@
-# VR LED Controller
+# VR LED Project
 
-A Python project to control LED strips using a VR controller. This project maps the physical positions of LEDs in a 3D space using a VR controller and lights up LEDs based on the controller's position and orientation.
+This repository contains a collection of projects and utilities for controlling addressable LEDs (such as WLED) using SteamVR-compatible VR controllers. The main focus is on mapping and controlling LEDs in real-time based on VR controller position and orientation, with additional features and experimental scripts for advanced LED effects and games.
 
 ---
 
-## Features
+## Main Project: VR LED Controller
+
+A Python package to control LED strips using a VR controller. It allows you to map the physical positions of LEDs in 3D space and light them up interactively using your VR controller.
+
+### Features
 - **LED Mapping**: Map the physical positions of LEDs using a VR controller.
 - **Real-Time Control**: Light up LEDs in real-time based on the VR controller's position and orientation.
 - **Fading Effects**: Smooth fading effects for LEDs.
 - **WLED Integration**: Send LED data to a WLED controller using the DDP protocol.
-- **Customizable**: Easily configure LED count, IP address, and other settings.
+- **Customizable**: Configure LED count, IP address, and other settings.
+- **Mini-Games**: Includes a Battleship game using the LED strip and VR controllers.
 
 ---
 
-## Requirements
-- Python 3.8 or higher
-- OpenVR (for VR controller support)
-- WLED-compatible LED controller
-- VR headset and controllers (e.g., HTC Vive, Oculus Rift)
+## Directory Structure & File Overview
+
+```
+VR_LED_Project/
+│
+├── vr_led_controller/           # Main package for VR LED control
+│   ├── audio_manager.py         # Handles sound effects for games and feedback
+│   ├── battleship.py            # Battleship game logic using LEDs and VR
+│   ├── config.py                # Configuration (WLED IP, LED count, etc.)
+│   ├── controller.py            # VR controller abstraction and input handling
+│   ├── helpers.py               # Utility functions (math, orientation, etc.)
+│   ├── led_manager.py           # LED state, DDP protocol, and effects
+│   ├── main.py                  # Main entry point for mapping/controlling LEDs
+│   ├── requirements.txt         # Python dependencies
+│   ├── vr_manager.py            # VR system setup, mapping, and tracking
+│   ├── sounds/                  # Sound files for feedback and games
+│   └── readme.md                # Detailed documentation for the package
+│
+├── README.md                    # (This file) Project overview and usage
+├── LICENSE                      # MIT License
+├── CODE_OF_CONDUCT.md           # Contributor code of conduct
+├── CONTRIBUTING.md              # Contribution guidelines
+├── SECURITY.md                  # Security policy
+├── DDP_LED_Test.py              # Test script for DDP LED communication
+├── VR_WLED_Test.py              # Test script for VR to WLED integration
+└── led_mapping.json             # Example or generated LED mapping data
+```
 
 ---
 
-## Installation
+## Installation & Setup
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/your-username/vr_led_controller.git
-cd vr_led_controller
-```
-
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Set Up WLED
-- Ensure your WLED controller is connected to the same network as your computer.
-- Update the `WLED_IP` in `config.py` with the IP address of your WLED controller.
+1. **Clone the Repository**
+   ```powershell
+   git clone https://github.com/your-username/VR_LED_Project.git
+   cd VR_LED_Project/vr_led_controller
+   ```
+2. **Install Dependencies**
+   ```powershell
+   pip install -r requirements.txt
+   ```
+3. **Configure WLED**
+   - Ensure your WLED controller is on the same network.
+   - Edit `config.py` and set `WLED_IP` to your controller's IP address.
 
 ---
 
 ## Usage
 
-### 1. Map LED Positions
-Run the following command to map the physical positions of your LEDs:
-```bash
-python -m vr_led_controller.main
-```
-- Choose `map` when prompted to start mapping.
-- Point your VR controller at each LED and pull the trigger to save its position.
+1. **Map LED Positions**
+   ```powershell
+   python -m vr_led_controller.main
+   ```
+   - Choose `map` when prompted.
+   - Point your VR controller at each LED and pull the trigger to save its position.
 
-### 2. Control LEDs
-After mapping, run the program again and choose `load` to load the saved LED positions. Point your VR controller to light up the LEDs.
+2. **Control LEDs**
+   - Run the program again and choose `load` to use the saved mapping.
+   - Point your VR controller to light up LEDs in real time.
 
-### 3. Change Colors
-- **Grip Button**: Change LED color to green.
-- **Menu Button**: Change LED color to blue.
-- **Trigger**: Change LED color to red.
+3. **Change LED Colors**
+   - **Grip Button**: Green
+   - **Menu Button**: Blue
+   - **Trigger**: Red
+
+4. **Play Battleship (Experimental)**
+   - Run `battleship.py` for a VR LED-based Battleship game.
 
 ---
 
 ## Configuration
-Edit the `config.py` file to customize the following settings:
-- `WLED_IP`: IP address of your WLED controller.
-- `NUM_LEDS`: Total number of LEDs on your strip.
-- `POINTER_ACCURACY`: Sensitivity of the VR controller's pointer.
-- `current_color`: Default LED color.
-
----
-
-## Project Structure
-```
-vr_led_controller/
-│
-├── __init__.py          # Package initialization
-├── config.py            # Configuration settings
-├── helpers.py           # Utility functions
-├── led_manager.py       # LED management and DDP protocol
-├── vr_manager.py        # VR controller mapping and tracking
-└── main.py              # Main program entry point
-```
+Edit `vr_led_controller/config.py` to adjust:
+- `WLED_IP`: IP address of your WLED controller
+- `NUM_LEDS`: Number of LEDs
+- `POINTER_ACCURACY`: Pointer sensitivity
+- `DEFAULT_COLOR`: Default LED color
+- `FADETIME`, `FADEDELAY`: Fading effect parameters
 
 ---
 
 ## Troubleshooting
-
-### 1. ModuleNotFoundError
-If you encounter `ModuleNotFoundError`, ensure the `vr_led_controller` package is in your `PYTHONPATH`. Add the following to your `.env` file:
-```
-PYTHONPATH=.
-```
-
-### 2. VR Controller Not Detected
-- Ensure your VR headset and controllers are properly connected and tracked.
-- Install the correct OpenVR drivers for your hardware.
-
-### 3. WLED Not Responding
-- Verify that the `WLED_IP` in `config.py` is correct.
-- Ensure your WLED controller is powered on and connected to the network.
+- **ModuleNotFoundError**: Ensure `vr_led_controller` is in your `PYTHONPATH`.
+- **VR Controller Not Detected**: Check VR hardware and OpenVR drivers.
+- **WLED Not Responding**: Verify `WLED_IP` and network connection.
 
 ---
 
 ## Contributing
-Contributions are welcome! Please follow these steps:
-1. Fork the repository.
-2. Create a new branch for your feature or bugfix.
-3. Submit a pull request with a detailed description of your changes.
+- Fork the repository and create a new branch for your changes.
+- Submit a pull request with a clear description.
 
 ---
 
 ## License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-- [OpenVR](https://github.com/ValveSoftware/openvr) for VR controller support.
-- [WLED](https://kno.wled.ge/) for LED strip control.
+MIT License. See `LICENSE` for details.
 
 ---
 
 ## Contact
-For questions or feedback, please open an issue on GitHub or contact Christopher at copter64@gmail.com.
+For questions or feedback, open an issue or contact Christopher at copter64@gmail.com.
 
 ---
 
